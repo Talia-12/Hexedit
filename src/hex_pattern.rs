@@ -4,8 +4,16 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 
 use egui::{Pos2, pos2};
+use regex::Regex;
 
-#[derive(serde::Deserialize, serde::Serialize)]
+const ANGLE_CHARS: [char; 10] = ['a', 'q', 'w', 'e', 'd', 'A', 'Q', 'W', 'E', 'D'];
+
+pub enum HexError {
+	Overlap,
+	InvalidString
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct HexPattern {
 	pub start_dir: HexAbsoluteDir,
 	pub pattern_vec: Vec<HexDir>
@@ -27,9 +35,83 @@ impl HexPattern {
 
 		return coords;
 	}
+
+	pub fn parse_string(string: &str) -> Result<HexPattern, HexError> {
+		let splitter_re = Regex::new("[\\s:;,()]").unwrap();
+		let out = splitter_re.split(string);
+
+		let mut angles: Option<Vec<HexDir>> = None;
+		let mut start_dir: Option<HexAbsoluteDir> = None;
+
+		for part in out {
+			if part.len() == 0 {
+				continue;
+			}
+
+			if part.chars().all(|c| { for char in ANGLE_CHARS { if c == char { return true } } return false }) {
+				angles = Some(Vec::from_iter(part.chars().map(|c| {
+					match c.to_uppercase().nth(0) {
+						Some('A') => HexDir::A,
+						Some('Q') => HexDir::Q,
+						Some('W') => HexDir::W,
+						Some('E') => HexDir::E,
+						Some('D') => HexDir::D,
+						_ => panic!("Checked above that all chars were AQWED and now they aren't??")
+					}
+				 })));
+
+				 continue
+			}
+
+			let mut matching = part.to_ascii_uppercase();
+			matching.retain(|c| { c != '_' });
+
+			start_dir = match &matching.as_str() {
+				&"EAST" => Some(HexAbsoluteDir::East),
+				&"SOUTHEAST" => Some(HexAbsoluteDir::SouthEast),
+				&"SOUTHWEST" => Some(HexAbsoluteDir::SouthWest),
+				&"WEST" => Some(HexAbsoluteDir::West),
+				&"NORTHWEST" => Some(HexAbsoluteDir::NorthWest),
+				&"NORTHEAST" => Some(HexAbsoluteDir::NorthEast),
+				_ => start_dir
+			}
+		};
+
+		if start_dir.is_none() {
+			return Err(HexError::InvalidString)
+		};
+
+		return HexPattern::hex_pattern(start_dir.unwrap(), angles.unwrap_or(vec![]))
+	}
+	
+	pub fn hex_pattern(start_dir: HexAbsoluteDir, pattern_vec: Vec<HexDir>) -> Result<HexPattern, HexError> {
+		let pattern = HexPattern { start_dir, pattern_vec };
+		
+		if HexPattern::check_for_overlap(&pattern.to_coords()) {
+			return Err(HexError::Overlap)
+		}
+	
+		return Ok(pattern)
+	}
+	
+	fn check_for_overlap(coords: &Vec<HexCoord>) -> bool {
+		let mut visited_edges: Vec<(HexCoord, HexCoord)> = vec![];
+	
+		for index in 1..coords.len() {
+			let start_coord = coords[index - 1];
+			let end_coord = coords[index];
+	
+			if visited_edges.contains(&(end_coord, start_coord)) || visited_edges.contains(&(start_coord, end_coord)) {
+				return true
+			}
+			visited_edges.push((start_coord, end_coord));
+		}
+	
+		return false
+	}
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub enum HexDir {
 		A,
 		Q,
@@ -53,7 +135,7 @@ impl HexDir {
 	}
 }
 
-#[derive(serde::Deserialize, serde::Serialize, ToPrimitive, FromPrimitive, Clone, Copy)]
+#[derive(serde::Deserialize, serde::Serialize, ToPrimitive, FromPrimitive, Clone, Copy, Debug)]
 pub enum HexAbsoluteDir {
 	East,
 	SouthEast,
