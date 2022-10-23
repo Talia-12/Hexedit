@@ -8,12 +8,13 @@ use regex::Regex;
 
 const ANGLE_CHARS: [char; 10] = ['a', 'q', 'w', 'e', 'd', 'A', 'Q', 'W', 'E', 'D'];
 
+#[derive(PartialEq, Debug)]
 pub enum HexError {
 	Overlap,
 	InvalidString
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Debug)]
+#[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
 pub struct HexPattern {
 	pub start_dir: HexAbsoluteDir,
 	pub pattern_vec: Vec<HexDir>
@@ -111,7 +112,7 @@ impl HexPattern {
 	}
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Debug)]
+#[derive(serde::Deserialize, serde::Serialize, PartialEq, Debug, Clone, Copy)]
 pub enum HexDir {
 		A,
 		Q,
@@ -135,7 +136,7 @@ impl HexDir {
 	}
 }
 
-#[derive(serde::Deserialize, serde::Serialize, ToPrimitive, FromPrimitive, Clone, Copy, Debug)]
+#[derive(serde::Deserialize, serde::Serialize, PartialEq, ToPrimitive, FromPrimitive, Clone, Copy, Debug)]
 pub enum HexAbsoluteDir {
 	East,
 	SouthEast,

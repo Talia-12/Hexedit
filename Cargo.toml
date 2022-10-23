@@ -15,6 +15,7 @@ serde = { version = "1", features = ["derive"] } # You only need this if you wan
 num-traits = "0.2"
 num-derive = "0.2"
 regex = "1"
+itertools = "0.10.5"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
