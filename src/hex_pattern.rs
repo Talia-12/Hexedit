@@ -1,4 +1,4 @@
-use std::ops::Add;
+use std::ops::{Add, Sub};
 
 use num_derive::{FromPrimitive, ToPrimitive};    
 use num_traits::{FromPrimitive, ToPrimitive};
@@ -35,6 +35,19 @@ impl HexPattern {
 		}
 
 		return coords;
+	}
+
+	pub fn add_dir(&mut self, dir: HexAbsoluteDir) {
+		let mut prev_coord = self.start_dir.coord_offset();
+		let mut prev_dir = self.start_dir;
+
+		for rel_dir in &self.pattern_vec {
+				(prev_coord, prev_dir) = rel_dir.coord_offset(prev_coord, prev_dir);
+		}
+
+		if let Some(rel_dir) = prev_dir.difference(dir) {
+			self.pattern_vec.push(rel_dir)
+		}
 	}
 
 	pub fn parse_string(string: &str) -> Result<HexPattern, HexError> {
@@ -123,7 +136,7 @@ pub enum HexDir {
 
 impl HexDir {
 	/// Takes in the absolute direction that the line was going, and returns the next coord as well as the new absolute direction.
-	fn coord_offset(&self, prev_coord: HexCoord, prev_dir: HexAbsoluteDir) -> (HexCoord, HexAbsoluteDir) {
+	pub fn coord_offset(&self, prev_coord: HexCoord, prev_dir: HexAbsoluteDir) -> (HexCoord, HexAbsoluteDir) {
 		let new_dir = match *self {
 			HexDir::A => prev_dir.turn(-2),
 			HexDir::Q => prev_dir.turn(-1),
@@ -147,7 +160,7 @@ pub enum HexAbsoluteDir {
 }
 
 impl HexAbsoluteDir {
-	fn coord_offset(&self) -> HexCoord {
+	pub fn coord_offset(&self) -> HexCoord {
 		match *self {
 			HexAbsoluteDir::East => hex_coord(1, 0),
 			HexAbsoluteDir::SouthEast => hex_coord(0, 1),
@@ -158,11 +171,57 @@ impl HexAbsoluteDir {
 		}
 	}
 
-	fn turn(&self, amount: i16) -> HexAbsoluteDir {
+	pub fn turn(&self, amount: i16) -> HexAbsoluteDir {
 		// cursed code to convert the current HexAbsoluteDir to an int, then add amount and modulo 6.
 		match FromPrimitive::from_i16(((*ToPrimitive::to_i16(self).get_or_insert(0) + amount) % 6 + 6) % 6) {
 				Some(d2) => d2,
 				None => FromPrimitive::from_u8(0).unwrap(),
+		}
+	}
+
+	pub fn difference(&self, other: HexAbsoluteDir) -> Option<HexDir> {
+		match (*self, other) {
+			(HexAbsoluteDir::East, HexAbsoluteDir::East) => Some(HexDir::W),
+			(HexAbsoluteDir::East, HexAbsoluteDir::SouthEast) => Some(HexDir::E),
+			(HexAbsoluteDir::East, HexAbsoluteDir::SouthWest) => Some(HexDir::D),
+			(HexAbsoluteDir::East, HexAbsoluteDir::West) => None,
+			(HexAbsoluteDir::East, HexAbsoluteDir::NorthWest) => Some(HexDir::A),
+			(HexAbsoluteDir::East, HexAbsoluteDir::NorthEast) => Some(HexDir::Q),
+
+			(HexAbsoluteDir::SouthEast, HexAbsoluteDir::East) => Some(HexDir::Q),
+			(HexAbsoluteDir::SouthEast, HexAbsoluteDir::SouthEast) => Some(HexDir::W),
+			(HexAbsoluteDir::SouthEast, HexAbsoluteDir::SouthWest) => Some(HexDir::E),
+			(HexAbsoluteDir::SouthEast, HexAbsoluteDir::West) => Some(HexDir::D),
+			(HexAbsoluteDir::SouthEast, HexAbsoluteDir::NorthWest) => None,
+			(HexAbsoluteDir::SouthEast, HexAbsoluteDir::NorthEast) => Some(HexDir::A),
+			
+			(HexAbsoluteDir::SouthWest, HexAbsoluteDir::East) => Some(HexDir::A),
+			(HexAbsoluteDir::SouthWest, HexAbsoluteDir::SouthEast) => Some(HexDir::Q),
+			(HexAbsoluteDir::SouthWest, HexAbsoluteDir::SouthWest) => Some(HexDir::W),
+			(HexAbsoluteDir::SouthWest, HexAbsoluteDir::West) => Some(HexDir::E),
+			(HexAbsoluteDir::SouthWest, HexAbsoluteDir::NorthWest) => Some(HexDir::D),
+			(HexAbsoluteDir::SouthWest, HexAbsoluteDir::NorthEast) => None,
+			
+			(HexAbsoluteDir::West, HexAbsoluteDir::East) => None,
+			(HexAbsoluteDir::West, HexAbsoluteDir::SouthEast) => Some(HexDir::A),
+			(HexAbsoluteDir::West, HexAbsoluteDir::SouthWest) => Some(HexDir::Q),
+			(HexAbsoluteDir::West, HexAbsoluteDir::West) => Some(HexDir::W),
+			(HexAbsoluteDir::West, HexAbsoluteDir::NorthWest) => Some(HexDir::E),
+			(HexAbsoluteDir::West, HexAbsoluteDir::NorthEast) => Some(HexDir::D),
+			
+			(HexAbsoluteDir::NorthWest, HexAbsoluteDir::East) => Some(HexDir::D),
+			(HexAbsoluteDir::NorthWest, HexAbsoluteDir::SouthEast) => None,
+			(HexAbsoluteDir::NorthWest, HexAbsoluteDir::SouthWest) => Some(HexDir::A),
+			(HexAbsoluteDir::NorthWest, HexAbsoluteDir::West) => Some(HexDir::Q),
+			(HexAbsoluteDir::NorthWest, HexAbsoluteDir::NorthWest) => Some(HexDir::W),
+			(HexAbsoluteDir::NorthWest, HexAbsoluteDir::NorthEast) => Some(HexDir::E),
+			
+			(HexAbsoluteDir::NorthEast, HexAbsoluteDir::East) => Some(HexDir::E),
+			(HexAbsoluteDir::NorthEast, HexAbsoluteDir::SouthEast) => Some(HexDir::D),
+			(HexAbsoluteDir::NorthEast, HexAbsoluteDir::SouthWest) => None,
+			(HexAbsoluteDir::NorthEast, HexAbsoluteDir::West) => Some(HexDir::A),
+			(HexAbsoluteDir::NorthEast, HexAbsoluteDir::NorthWest) => Some(HexDir::Q),
+			(HexAbsoluteDir::NorthEast, HexAbsoluteDir::NorthEast) => Some(HexDir::W),
 		}
 	}
 }
@@ -179,6 +238,43 @@ impl HexCoord {
 		let r = self.r as f32;
 		return pos2(3.0_f32.sqrt() * q + 3.0_f32.sqrt()/2.0 * r, 3.0/2.0 * r);
 	}
+
+	pub fn dir_to(&self, other: HexCoord) -> Option<HexAbsoluteDir> {
+		match other - *self {
+			HexCoord{q: 1, r: 0} => Some(HexAbsoluteDir::East),
+			HexCoord{q: 0, r: 1} => Some(HexAbsoluteDir::SouthEast),
+			HexCoord{q: -1, r: 1} => Some(HexAbsoluteDir::SouthWest),
+			HexCoord{q: -1, r: 0} => Some(HexAbsoluteDir::West),
+			HexCoord{q: 0, r: -1} => Some(HexAbsoluteDir::NorthWest),
+			HexCoord{q: 1, r: -1} => Some(HexAbsoluteDir::NorthEast),
+			_ => None
+		}
+	}
+
+	pub fn from_cartesian(pos: Pos2) -> HexCoord {
+		let fq = 3.0_f32.sqrt()/3.0 * pos.x - 1.0/3.0 * pos.y;
+		let fr = 2.0/3.0 * pos.y;
+		return HexCoord::round(fq, fr)
+	}
+
+	fn round(fq: f32, fr: f32) -> HexCoord {
+		let fs = -fq - fr;
+		let mut q = fq.round();
+		let mut r = fr.round();
+		let s = fs.round();
+
+		let q_diff = (q - fq).abs();
+		let r_diff = (r - fr).abs();
+		let s_diff = (s - fs).abs();
+
+		if q_diff > r_diff && q_diff > s_diff {
+			q = -r-s
+		} else if r_diff > s_diff {
+			r = -q-s
+		}
+
+		return hex_coord(q as i32, r as i32)
+	}
 }
 
 impl Add for HexCoord {
@@ -187,6 +283,14 @@ impl Add for HexCoord {
     fn add(self, rhs: Self) -> Self::Output {
         return hex_coord(self.q + rhs.q, self.r + rhs.r)
     }
+}
+
+impl Sub for HexCoord {
+	type Output = HexCoord;
+
+	fn sub(self, rhs: Self) -> Self::Output {
+			return hex_coord(self.q - rhs.q, self.r - rhs.r)
+	}
 }
 
 pub fn hex_coord(q: i32, r: i32) -> HexCoord {

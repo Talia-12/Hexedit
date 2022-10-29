@@ -5,9 +5,21 @@
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     // Log to stdout (if you run with `RUST_LOG=debug`).
+
     tracing_subscriber::fmt::init();
 
-    let native_options = eframe::NativeOptions::default();
+    // let mut native_options = eframe::NativeOptions::default();
+		// native_options.initial_window_pos = Some(pos2(1000.0, 0.0));
+		// native_options.fullscreen = true;
+		// let pos = native_options.initial_window_pos;
+		// let size = native_options.initial_window_size;
+		let native_options = eframe::NativeOptions {
+      resizable: true,
+      initial_window_size: Some(egui::Vec2 { x: 400.0, y: 400.0 }),
+      min_window_size: Some(egui::Vec2 { x: 300.0, y: 300.0 }),
+      ..Default::default()
+};
+		// println!("{pos:?}, {size:?}");
     eframe::run_native(
         "Hexedit",
         native_options,

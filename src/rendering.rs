@@ -1,13 +1,13 @@
 use std::f32::consts::PI;
 use std::any::Any;
 
-use eframe::{emath, epaint::CircleShape};
+use eframe::{emath::{self, RectTransform}, epaint::CircleShape};
 use egui::{Stroke, Color32, Rect, Ui, Shape, Pos2, pos2, Vec2, vec2};
 
 use crate::hex_pattern::*;
 
 pub trait Renderable {
-	fn render(&self, ui: &mut Ui, rect: Rect);
+	fn render_to_rect(&self, ui: &mut Ui, rect: Rect);
 
 	fn canonical_text(&self) -> String;
 
@@ -15,7 +15,7 @@ pub trait Renderable {
 }
 
 impl Renderable for String {
-	fn render(&self, ui: &mut Ui, _rect: Rect) {
+	fn render_to_rect(&self, ui: &mut Ui, _rect: Rect) {
 		ui.label(self);
 	}
 
@@ -28,20 +28,8 @@ impl Renderable for String {
 	}
 }
 
-impl Renderable for HexPattern {
-	fn render(&self, ui: &mut Ui, rect: Rect) {
-		let mut m_rect = rect;
-
-		let diff = m_rect.height() - m_rect.width();
-		if diff > 0.0 {
-			m_rect.set_top(m_rect.top() + diff * 0.5);
-			m_rect.set_bottom(m_rect.bottom() - diff * 0.5);
-		}
-		else if diff < 0.0 {
-			m_rect.set_left(m_rect.left() - diff * 0.5);
-			m_rect.set_right(m_rect.right() + diff * 0.5);
-		}
-
+impl HexPattern {
+	pub(crate) fn render(&self, ui: &mut Ui, to_screen: RectTransform, cursor_position: Option<Pos2>, offset: Option<HexCoord>) {
 		let colours = if ui.visuals().dark_mode {
 			vec![
 				Color32::from_rgb(0xff, 0x6b, 0xff),
@@ -68,6 +56,72 @@ impl Renderable for HexPattern {
 		let dot_thickness = 10.0 as f32;
 		let arrow_thickness = 25.0 as f32;
 		
+		let coords = Vec::from_iter(self.to_coords().clone().iter().map(|coord| { if let Some(offset) = offset { *coord + offset } else { *coord } }));
+
+		let mut shapes = vec![];
+		let mut dots: Vec<Shape> = vec![];
+
+		let mut current_colour_index = 0;
+		let mut current_line: Vec<Pos2> = vec![to_screen * coords[0].to_cartesian()];
+
+		let mut visited_vertex_colours: Vec<(HexCoord, usize)> = vec![(coords[0], current_colour_index)];
+
+		for index in 1..coords.len() {
+			let start_coord = coords[index - 1];
+			let end_coord = coords[index];
+
+			let start_screen = to_screen * start_coord.to_cartesian();
+			let end_screen = to_screen * end_coord.to_cartesian();
+
+
+			if visited_vertex_colours.contains(&(end_coord, current_colour_index)) {
+				let midway = pos2(start_screen.x * 0.5 + end_screen.x * 0.5, start_screen.y * 0.5 + end_screen.y * 0.5);
+				
+				current_line.push(midway);
+				shapes.push(Shape::line(current_line, Stroke::new(line_thickness, colours[current_colour_index])));
+				
+				current_colour_index = (current_colour_index + 1) % colours.len();
+				
+				shapes.push(arrow(&midway, &start_screen, arrow_thickness, colours[current_colour_index]));
+				current_line = vec![midway, end_screen];
+			} else {
+				current_line.push(end_screen);
+			}
+
+			visited_vertex_colours.push((end_coord, current_colour_index));
+
+			dots.push(Shape::circle_filled(end_screen, dot_thickness, dot_colour))
+		}
+
+		if let Some(cursor_position) = cursor_position {
+			current_line.push(cursor_position)
+		}
+
+		shapes.push(Shape::line(current_line, Stroke::new(line_thickness, colours[current_colour_index])));
+
+		shapes.append(&mut dots);
+
+		// draw the dot for the start of the pattern.
+		shapes.push(Shape::Circle(CircleShape{ center: to_screen * coords[0].to_cartesian(), radius: dot_thickness, fill: colours[0], stroke: Stroke::new(dot_thickness * 0.6, dot_colour) }));
+
+		ui.painter().extend(shapes);
+	}
+}
+
+impl Renderable for HexPattern {
+	fn render_to_rect(&self, ui: &mut Ui, rect: Rect) {
+		let mut m_rect = rect;
+
+		let diff = m_rect.height() - m_rect.width();
+		if diff > 0.0 {
+			m_rect.set_top(m_rect.top() + diff * 0.5);
+			m_rect.set_bottom(m_rect.bottom() - diff * 0.5);
+		}
+		else if diff < 0.0 {
+			m_rect.set_left(m_rect.left() - diff * 0.5);
+			m_rect.set_right(m_rect.right() + diff * 0.5);
+		}
+
 		let coords = self.to_coords();
 
 		let mut min_x = f32::MAX;
@@ -106,49 +160,7 @@ impl Renderable for HexPattern {
 
 		let to_screen = emath::RectTransform::from_to(Rect::from_x_y_ranges(min_x..=max_x, min_y..=max_y), m_rect);
 
-		let mut shapes = vec![];
-		let mut dots: Vec<Shape> = vec![];
-
-		let mut current_colour_index = 0;
-		let mut current_line: Vec<Pos2> = vec![to_screen * coords[0].to_cartesian()];
-
-		let mut visited_vertex_colours: Vec<(HexCoord, usize)> = vec![(coords[0], current_colour_index)];
-
-		for index in 1..coords.len() {
-			let start_coord = coords[index - 1];
-			let end_coord = coords[index];
-
-			let start_screen = to_screen * start_coord.to_cartesian();
-			let end_screen = to_screen * end_coord.to_cartesian();
-
-
-			if visited_vertex_colours.contains(&(end_coord, current_colour_index)) {
-				let midway = pos2(start_screen.x * 0.5 + end_screen.x * 0.5, start_screen.y * 0.5 + end_screen.y * 0.5);
-				
-				current_line.push(midway);
-				shapes.push(Shape::line(current_line, Stroke::new(line_thickness, colours[current_colour_index])));
-				
-				current_colour_index = (current_colour_index + 1) % colours.len();
-				
-				shapes.push(arrow(&midway, &start_screen, arrow_thickness, colours[current_colour_index]));
-				current_line = vec![midway, end_screen];
-			} else {
-				current_line.push(end_screen);
-			}
-
-			visited_vertex_colours.push((end_coord, current_colour_index));
-
-			dots.push(Shape::circle_filled(end_screen, dot_thickness, dot_colour))
-		}
-
-		shapes.push(Shape::line(current_line, Stroke::new(line_thickness, colours[current_colour_index])));
-
-		shapes.append(&mut dots);
-
-		// draw the dot for the start of the pattern.
-		shapes.push(Shape::Circle(CircleShape{ center: to_screen * coords[0].to_cartesian(), radius: dot_thickness, fill: colours[0], stroke: Stroke::new(dot_thickness * 0.6, dot_colour) }));
-
-		ui.painter().extend(shapes);			
+		self.render(ui, to_screen, None, None)
 	}
 
 	fn canonical_text(&self) -> String {

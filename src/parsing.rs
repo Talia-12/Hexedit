@@ -5,7 +5,7 @@ use crate::{hex_pattern::*, rendering::Renderable};
 // 	errors_on: Vec<u32>
 // }
 
-pub fn parse_string_to_list(string: &str) -> Result<Vec<Box<dyn Renderable>>, ParseError> {
+pub fn parse_string_to_list(string: &str) -> Result<Vec<Box<dyn Renderable>>, HexError> {
 	let mut str = string.to_string().to_ascii_uppercase();
 
 	let separated = if str.contains("HEX_PATTERN") || str.contains("HEXPATTERN") {
@@ -32,9 +32,8 @@ pub fn parse_string_to_list(string: &str) -> Result<Vec<Box<dyn Renderable>>, Pa
 	};
 
 	let out = separated.map(|entry| -> Box<dyn Renderable> {
-		let parsed_pattern = HexPattern::parse_string(entry);
-		if parsed_pattern.is_ok() {
-			return Box::new(parsed_pattern.unwrap())
+		if let Ok(parsed_pattern) = HexPattern::parse_string(entry) {
+			return Box::new(parsed_pattern)
 		};
 
 		return Box::new("UNKNOWN".to_string());
