@@ -7,13 +7,15 @@ use crate::hex_pattern::*;
 use crate::parsing::parse_string_to_list;
 use crate::rendering::*;
 
-const NODE_SELECT_SQR_RADIUS: f32 = 0.5*0.5; // distance from current node outside which should attempt to connect to next node.
+const NODE_EMPTY_SQR_RADIUS: f32 = 0.5*0.5; // distance from current node inside which state shouldn't change.
+const NODE_SELECT_NEXT_SQR_RADIUS: f32 = 1.5*1.5; // distance from current node outside which should attempt to connect to next node.
 
 #[derive(PartialEq)]
 enum LastNodeState {
 	Added,
 	Neutral,
-	Removed
+	Removed,
+	RemovedBackward
 }
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -167,7 +169,7 @@ impl eframe::App for HexeditApp {
 
 				let hover_pos = ui.input().pointer.hover_pos();
 
-				let debug_colour0 = Color32::from_rgb(60,60,60);
+				// let debug_colour0 = Color32::from_rgb(60,60,60);
 				let debug_colour1 = Color32::from_rgb(130, 0,0);
 				let debug_colour2 = Color32::from_rgb(0, 130,0);
 				let debug_colour3 = Color32::from_rgb(0, 0,130);
@@ -201,31 +203,54 @@ impl eframe::App for HexeditApp {
 
 							ui.painter().circle_filled(to_screen * inner_last_draw_node.to_cartesian(), 8.0, debug_colour2);
 
-
-							let nearest = HexCoord::from_cartesian(hex_hover_pos);
-							if nearest != *inner_last_draw_node && (hex_hover_pos - nearest.to_cartesian()).length_sq() < NODE_SELECT_SQR_RADIUS {
-								// near enough to nearest to add it.
-								if let Some(abs_dir) = inner_last_draw_node.dir_to(nearest) {
-									// if the nearest is actually adjacent to the last node
-									if let Some(inner_drawing_pattern) = drawing_pattern {
-										// if a pattern has already been made, add to it.
-										inner_drawing_pattern.add_dir(abs_dir)
+							if (hex_hover_pos - inner_last_draw_node.to_cartesian()).length_sq() > NODE_SELECT_NEXT_SQR_RADIUS {
+								// far enough from last_draw_node to attempt to connect to the next node.
+								let nearest_dir = HexAbsoluteDir::nearest_dir(hex_hover_pos - inner_last_draw_node.to_cartesian());
+								
+								if let Some(inner_drawing_pattern) = drawing_pattern {
+									let cursor_nearest = Some(*inner_last_draw_node - start_draw_node.unwrap_or(hex_coord(0, 0)) + nearest_dir.coord_offset());
+									let mut pattern_coords = inner_drawing_pattern.to_coords();
+									pattern_coords.pop();
+									let check_against = pattern_coords.pop();
+									if cursor_nearest == check_against {
+										// THIS EXACT SAME CODE IS DUPLICATED BELOW MAKE IT INTO A FUNCTION
+										*last_node_status = LastNodeState::RemovedBackward;
+										if let Some(inner_drawing_pattern) = drawing_pattern {
+											// if a pattern exists, remove a HexDir from it
+											if inner_drawing_pattern.pattern_vec.pop().is_none() {
+												// if there's no HexDir to remove, delete the whole pattern (since it only has two nodes, removing 1 from it deletes it)
+												*drawing_pattern = None
+											}
+										} else {
+											// if there's no HexPattern and we're removing a node, we have to stop drawing all together
+											*start_draw_node = None;
+											*last_draw_node = None;
+										}
 									} else {
-										// otherwise, make a new pattern.
-										*drawing_pattern = if let Ok(pattern) = HexPattern::hex_pattern(abs_dir, vec![]) { Some(pattern) } else { None }
+										inner_drawing_pattern.add_dir(nearest_dir);
 									}
+								} else {
+									*drawing_pattern = if let Ok(pattern) = HexPattern::hex_pattern(nearest_dir, vec![]) { Some(pattern) } else { None }
+								}
 
-									*inner_last_draw_node = nearest;
-									*last_node_status = LastNodeState::Added;
+								if *last_node_status != LastNodeState::RemovedBackward {
+									if let Some(inner_drawing_pattern) = drawing_pattern {
+										if let Some(start_draw_node) = start_draw_node {
+											*last_draw_node = if let Some(coord) = inner_drawing_pattern.to_coords().pop() { Some(coord + *start_draw_node) } else { None };
+											*last_node_status = LastNodeState::Added;
+										}
+									}
 								}
 							}
+						}
 							
+						if let Some(inner_last_draw_node) = last_draw_node {
 							let sqr_dist_to_node = (hex_hover_pos - inner_last_draw_node.to_cartesian()).length_sq();
 							if sqr_dist_to_node > NODE_EMPTY_SQR_RADIUS {
 								if *last_node_status == LastNodeState::Added {
 									*last_node_status = LastNodeState::Neutral
-								} else if *last_node_status == LastNodeState::Removed {
-									*last_node_status = LastNodeState::Neutral;
+								} else if *last_node_status == LastNodeState::Removed || *last_node_status == LastNodeState::RemovedBackward {
+									*last_node_status = if *last_node_status == LastNodeState::Removed { LastNodeState::Neutral } else { LastNodeState::Removed };
 									// return node to previous node
 									if let Some(inner_drawing_pattern) = drawing_pattern {
 										*last_draw_node = Some(inner_drawing_pattern.to_coords().pop().unwrap() + start_draw_node.unwrap_or(hex_coord(0,0)))
@@ -234,7 +259,7 @@ impl eframe::App for HexeditApp {
 										*last_draw_node = start_draw_node.clone();
 									}
 								}
-							} else if *last_node_status == LastNodeState::Neutral {
+							} else if sqr_dist_to_node < NODE_EMPTY_SQR_RADIUS && *last_node_status == LastNodeState::Neutral {
 								// if the sqr_dist is less than NODE_SELECT, and the last_node_status is neutral, removing a node
 								*last_node_status = LastNodeState::Removed;
 								if let Some(inner_drawing_pattern) = drawing_pattern {

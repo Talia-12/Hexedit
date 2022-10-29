@@ -1,9 +1,9 @@
-use std::ops::{Add, Sub};
+use std::{ops::{Add, Sub}, f32::consts::TAU};
 
 use num_derive::{FromPrimitive, ToPrimitive};    
 use num_traits::{FromPrimitive, ToPrimitive};
 
-use egui::{Pos2, pos2};
+use egui::{Pos2, pos2, Vec2};
 use regex::Regex;
 
 const ANGLE_CHARS: [char; 10] = ['a', 'q', 'w', 'e', 'd', 'A', 'Q', 'W', 'E', 'D'];
@@ -37,6 +37,7 @@ impl HexPattern {
 		return coords;
 	}
 
+	/// Adds a HexDir from the last node of the current pattern in the passed dir, if that doesn't cause an overlap.
 	pub fn add_dir(&mut self, dir: HexAbsoluteDir) {
 		let mut prev_coord = self.start_dir.coord_offset();
 		let mut prev_dir = self.start_dir;
@@ -46,7 +47,9 @@ impl HexPattern {
 		}
 
 		if let Some(rel_dir) = prev_dir.difference(dir) {
-			self.pattern_vec.push(rel_dir)
+			self.pattern_vec.push(rel_dir);
+
+			if Self::check_for_overlap(&self.to_coords()) { self.pattern_vec.pop(); } // if the added direction causes an overlap, remove it.
 		}
 	}
 
@@ -160,6 +163,17 @@ pub enum HexAbsoluteDir {
 }
 
 impl HexAbsoluteDir {
+	pub fn nearest_dir(dir: Vec2) -> HexAbsoluteDir {
+		let angle = (-dir.angle() % TAU + TAU) % TAU;
+
+		return if TAU/12.0 <= angle && angle < 3.0*TAU/12.0 { HexAbsoluteDir::NorthEast }
+		else if 3.0*TAU/12.0 <= angle && angle < 5.0*TAU/12.0 { HexAbsoluteDir::NorthWest }
+		else if 5.0*TAU/12.0 <= angle && angle < 7.0*TAU/12.0 { HexAbsoluteDir::West }
+		else if 7.0*TAU/12.0 <= angle && angle < 9.0*TAU/12.0 { HexAbsoluteDir::SouthWest }
+		else if 9.0*TAU/12.0 <= angle && angle < 11.0*TAU/12.0 { HexAbsoluteDir::SouthEast }
+		else { HexAbsoluteDir::East }
+	}
+
 	pub fn coord_offset(&self) -> HexCoord {
 		match *self {
 			HexAbsoluteDir::East => hex_coord(1, 0),
