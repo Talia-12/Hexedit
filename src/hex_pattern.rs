@@ -4,9 +4,6 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 
 use egui::{Pos2, pos2, Vec2};
-use regex::Regex;
-
-const ANGLE_CHARS: [char; 10] = ['a', 'q', 'w', 'e', 'd', 'A', 'Q', 'W', 'E', 'D'];
 
 #[derive(PartialEq, Debug)]
 pub enum HexError {
@@ -51,54 +48,6 @@ impl HexPattern {
 
 			if Self::check_for_overlap(&self.to_coords()) { self.pattern_vec.pop(); } // if the added direction causes an overlap, remove it.
 		}
-	}
-
-	pub fn parse_string(string: &str) -> Result<HexPattern, HexError> {
-		let splitter_re = Regex::new("[\\s:;,()]").unwrap();
-		let out = splitter_re.split(string);
-
-		let mut angles: Option<Vec<HexDir>> = None;
-		let mut start_dir: Option<HexAbsoluteDir> = None;
-
-		for part in out {
-			if part.len() == 0 {
-				continue;
-			}
-
-			if part.chars().all(|c| { for char in ANGLE_CHARS { if c == char { return true } } return false }) {
-				angles = Some(Vec::from_iter(part.chars().map(|c| {
-					match c.to_uppercase().nth(0) {
-						Some('A') => HexDir::A,
-						Some('Q') => HexDir::Q,
-						Some('W') => HexDir::W,
-						Some('E') => HexDir::E,
-						Some('D') => HexDir::D,
-						_ => panic!("Checked above that all chars were AQWED and now they aren't??")
-					}
-				 })));
-
-				 continue
-			}
-
-			let mut matching = part.to_ascii_uppercase();
-			matching.retain(|c| { c != '_' });
-
-			start_dir = match &matching.as_str() {
-				&"EAST" => Some(HexAbsoluteDir::East),
-				&"SOUTHEAST" => Some(HexAbsoluteDir::SouthEast),
-				&"SOUTHWEST" => Some(HexAbsoluteDir::SouthWest),
-				&"WEST" => Some(HexAbsoluteDir::West),
-				&"NORTHWEST" => Some(HexAbsoluteDir::NorthWest),
-				&"NORTHEAST" => Some(HexAbsoluteDir::NorthEast),
-				_ => start_dir
-			}
-		};
-
-		if start_dir.is_none() {
-			return Err(HexError::InvalidString)
-		};
-
-		return HexPattern::hex_pattern(start_dir.unwrap(), angles.unwrap_or(vec![]))
 	}
 	
 	pub fn hex_pattern(start_dir: HexAbsoluteDir, pattern_vec: Vec<HexDir>) -> Result<HexPattern, HexError> {
@@ -253,17 +202,17 @@ impl HexCoord {
 		return pos2(3.0_f32.sqrt() * q + 3.0_f32.sqrt()/2.0 * r, 3.0/2.0 * r);
 	}
 
-	pub fn dir_to(&self, other: HexCoord) -> Option<HexAbsoluteDir> {
-		match other - *self {
-			HexCoord{q: 1, r: 0} => Some(HexAbsoluteDir::East),
-			HexCoord{q: 0, r: 1} => Some(HexAbsoluteDir::SouthEast),
-			HexCoord{q: -1, r: 1} => Some(HexAbsoluteDir::SouthWest),
-			HexCoord{q: -1, r: 0} => Some(HexAbsoluteDir::West),
-			HexCoord{q: 0, r: -1} => Some(HexAbsoluteDir::NorthWest),
-			HexCoord{q: 1, r: -1} => Some(HexAbsoluteDir::NorthEast),
-			_ => None
-		}
-	}
+	// pub fn dir_to(&self, other: HexCoord) -> Option<HexAbsoluteDir> {
+	// 	match other - *self {
+	// 		HexCoord{q: 1, r: 0} => Some(HexAbsoluteDir::East),
+	// 		HexCoord{q: 0, r: 1} => Some(HexAbsoluteDir::SouthEast),
+	// 		HexCoord{q: -1, r: 1} => Some(HexAbsoluteDir::SouthWest),
+	// 		HexCoord{q: -1, r: 0} => Some(HexAbsoluteDir::West),
+	// 		HexCoord{q: 0, r: -1} => Some(HexAbsoluteDir::NorthWest),
+	// 		HexCoord{q: 1, r: -1} => Some(HexAbsoluteDir::NorthEast),
+	// 		_ => None
+	// 	}
+	// }
 
 	pub fn from_cartesian(pos: Pos2) -> HexCoord {
 		let fq = 3.0_f32.sqrt()/3.0 * pos.x - 1.0/3.0 * pos.y;

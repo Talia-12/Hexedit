@@ -4,8 +4,7 @@ use egui::{Rect, Color32, Shape};
 use itertools::join;
 
 use crate::hex_pattern::*;
-use crate::parsing::parse_string_to_list;
-use crate::rendering::*;
+use crate::parsing::parse_to_list;
 
 const NODE_EMPTY_SQR_RADIUS: f32 = 0.5*0.5; // distance from current node inside which state shouldn't change.
 const NODE_SELECT_NEXT_SQR_RADIUS: f32 = 1.5*1.5; // distance from current node outside which should attempt to connect to next node.
@@ -117,7 +116,7 @@ impl eframe::App for HexeditApp {
 			ui.toggle_value(are_drawing, "Draw Pattern");
 			
 			if ui.toggle_value(show_canonical, "Show Canonical").clicked() && *show_canonical {
-				let result = parse_string_to_list(pattern_text.as_str());
+				let result = parse_to_list(pattern_text.as_str());
 
 				*canonical_text = match result {
 					Ok(x) => join(x.iter().map(|r| { r.canonical_text() }), "\n"),
@@ -297,9 +296,8 @@ impl eframe::App for HexeditApp {
 
 			let (_id, rect) = ui.allocate_space(ui.available_size());
 
-			match HexPattern::parse_string(pattern_text.as_str()) {
-				Ok(x) => x.render_to_rect(ui, rect),
-				Err(_) => (),
+			if let Ok(result) = parse_to_list(pattern_text.as_str()) {
+				result[0].render_to_rect(ui, rect)
 			}
 		});
 	}
