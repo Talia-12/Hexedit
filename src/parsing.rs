@@ -46,7 +46,7 @@ pub fn parse_to_list(string: &str) -> Result<Vec<Box<dyn Renderable>>, HexError>
 
 const ANGLE_CHARS: [char; 10] = ['a', 'q', 'w', 'e', 'd', 'A', 'Q', 'W', 'E', 'D'];
 
-fn parse_to_hex_pattern(string: &str) -> Result<HexPattern, HexError> {
+pub fn parse_to_hex_pattern(string: &str) -> Result<HexPattern, HexError> {
 	let splitter_re = Regex::new("[\\s:;,()]").unwrap();
 	let out = splitter_re.split(string);
 
